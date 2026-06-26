@@ -53,6 +53,7 @@ export interface CareerPath {
   id: string;
   title: string;
   archetype: string;
+  domain?: string;               // catalog function (Product / Engineering / Data & AI / ...) — drives mentor + job fit
   bestMatch: boolean;
   matchPct: number;              // grounded fit score shown on the card / deep dive
   fit: string[];                 // why you're a fit (bullets)
@@ -60,6 +61,7 @@ export interface CareerPath {
   dayToDay?: string[];           // a typical day in this role (compare)
   life?: string;                 // what your life would look like (compare)
   levelStep?: number;            // how many levels above current (how-far)
+  needsMba?: boolean;            // a 2-rung jump — typically needs an MBA / equivalent reset
   skillsHave: string[];
   skillsBuild: SkillItem[];
   salaryFamily: string;
@@ -77,7 +79,11 @@ export interface Job {
   comp: string;          // e.g. "₹90L–₹1.4Cr"
   posted: string;        // e.g. "2d ago"
   mustHaves: string[];
-  matchPct?: number;     // filled per-user
+  domain?: string;       // catalog function this opening sits in (for fit scoring)
+  level?: string;        // rough seniority of the opening (entry..exec)
+  matchPct?: number;     // filled per-user — real fit, not a flat number
+  fitReason?: string;    // why THIS person fits (their matching strengths)
+  topGap?: string;       // the one must-have they'd most need to shore up
 }
 
 // Role deep dive (matches Navi's accordion: what / why-ready / learn / companies).

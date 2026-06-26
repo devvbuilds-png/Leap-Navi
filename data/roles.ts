@@ -5384,6 +5384,26 @@ export const ROLES: CareerRole[] = [
 
 const LEVEL_ORDER: RoleLevel[] = ["entry","mid","senior","lead","director","vp","exec"];
 export const levelRank = (l: string) => Math.max(0, LEVEL_ORDER.indexOf(l as RoleLevel));
+export const levelOf = (rank: number): RoleLevel => LEVEL_ORDER[Math.max(0, Math.min(LEVEL_ORDER.length - 1, rank))];
+
+// The designation ladder: each rung + the experience it typically takes to reach it (India tech/PM
+// norms). Used to estimate a candidate's TRUE level from years — so we don't over-promote off a
+// résumé — and to size realistic jumps. A 2-rung jump usually needs an MBA or an equivalent reset.
+export const LADDER: { level: RoleLevel; minYears: number; needs: string }[] = [
+  { level: "entry",    minYears: 0,  needs: "0-2 yrs" },
+  { level: "mid",      minYears: 3,  needs: "3-5 yrs" },
+  { level: "senior",   minYears: 6,  needs: "6-8 yrs" },
+  { level: "lead",     minYears: 9,  needs: "9-11 yrs (GPM / Principal / EM)" },
+  { level: "director", minYears: 11, needs: "11-15 yrs" },
+  { level: "vp",       minYears: 15, needs: "15-19 yrs" },
+  { level: "exec",     minYears: 19, needs: "19+ yrs" },
+];
+export function levelFromYears(years: number): RoleLevel {
+  let lv: RoleLevel = "entry";
+  for (const r of LADDER) if (years >= r.minYears) lv = r.level;
+  return lv;
+}
+export const experienceForLevel = (l: RoleLevel): string => LADDER.find((r) => r.level === l)?.needs || "";
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 

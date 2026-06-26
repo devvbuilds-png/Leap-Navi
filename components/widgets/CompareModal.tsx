@@ -26,7 +26,7 @@ export default function CompareModal({ paths, onClose, onSelect }: {
                 <div className="cmp-col-t">{p.title}</div>
                 {p.id === best.id && <span className="cmp-badge">Best fit</span>}
               </div>
-              <div className="cmp-tags"><span className="cmp-move">{move}</span><span className="cmp-risk">{p.compare?.risk} risk</span></div>
+              <div className="cmp-tags"><span className="cmp-move">{move}</span>{p.needsMba && <span className="cmp-mba">MBA-track</span>}<span className="cmp-risk">{p.compare?.risk} risk</span></div>
 
               <div className="cmp-block">
                 <div className="cmp-lbl">How far you are</div>

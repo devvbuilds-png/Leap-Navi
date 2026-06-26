@@ -16,8 +16,9 @@
  * Guardrail: even LLM-extracted résumés are run through reconcileExperience() so the
  * phantom multi-decade "gap loop" bug can never reappear (the #1 teardown finding).
  */
-import type { Profile, Answers, CareerPath, AnalyzeResult, ResumeRole } from "./types";
+import type { Profile, Answers, CareerPath, AnalyzeResult, ResumeRole, RoadmapPhase } from "./types";
 import { generatePaths } from "./engine/analyze";
+import { buildRoadmap } from "./engine/roadmap";
 import { parseProfile, reconcileExperience, monthIndex, yearsLabel, seniorityFor, guessDomain } from "./engine/parseProfile";
 
 // Provider-agnostic. Prefer OpenAI (ChatGPT) when OPENAI_API_KEY is set, else Anthropic,
@@ -59,7 +60,7 @@ async function complete(system: string, user: string, maxTokens = 1200, json = f
   if (!c) throw new Error("no-sdk");
 
   if (p === "openai") {
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const model = process.env.OPENAI_MODEL || "gpt-5.4-mini";
     const res = await c.chat.completions.create({
       model,
       max_tokens: maxTokens,
@@ -134,7 +135,7 @@ export async function parseResumePDFLLM(buffer: Buffer, fileName = "resume.pdf")
     const client = await getClient("openai");
     if (!client) return null;
     const response = await client.responses.create({
-      model: process.env.OPENAI_PDF_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini",
+      model: process.env.OPENAI_PDF_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-mini",
       max_output_tokens: 2600,
       input: [{
         role: "user",
@@ -209,7 +210,32 @@ const PATHS_SYS = `You are Navi+, a sharp, honest AI career strategist for the I
                "fit": string[3], // why they fit — reference their real wins/skills, <16 words each
                "whatItDoes": string[2] } ]  // what the role does day-to-day, <16 words each
 }
-Keep all three given roles; order them best-fit first. Never use em dashes (—); write with commas, colons, or periods.`;
+Keep all three given roles; order them best-fit first. Never use em dashes (—); write with commas, colons, or periods.
+PERSONA RULE: if the person is a recent grad or has under ~2 years of experience, the tension must be about building a strong foundation and thinking structurally about which direction compounds — NOT chasing senior titles or "more options". Frame their need as structured thinking, not more choices. If they're mid/senior, name the real trade-off in their next move.
+GROUNDING RULE: every "fit" bullet must reference something concrete from THIS person, a named skill, a quantified win, their years, their domain, or their current title. A bullet that would read identically for a stranger is wrong, rewrite it.
+BANNED PHRASES (never output): "great opportunity", "strong fit", "perfect match", "leverage your skills", "exciting role", "take it to the next level", "dynamic", "passionate", "valuable asset", "well-suited". Write like a senior operator who has hired for these roles, not a brochure.`;
+
+// Sanity layer for LLM path prose. A small model (gpt-4o-mini) will sometimes emit generic
+// filler; we reject any bullet that is empty, too long, banned, or not grounded in the person,
+// and fall back to the deterministic engine bullet for that slot. This keeps the recommendations
+// specific without trusting the model blindly.
+const BANNED_FIT = /great opportunity|strong fit|perfect match|leverage your skills?|exciting role|next level|dynamic|passionate|excellent fit|good fit|valuable asset|well[- ]suited/i;
+const cleanLine = (s: string) => String(s).replace(/—/g, ", ").replace(/\s+/g, " ").trim();
+function bulletGrounded(bullet: string, anchors: string[]): boolean {
+  const b = bullet.toLowerCase();
+  if (b.length < 8 || b.split(" ").length > 20) return false;
+  if (BANNED_FIT.test(b)) return false;
+  return anchors.some((a) => a.length >= 4 && b.includes(a));
+}
+// Keep LLM fit bullets only where they're grounded; otherwise reuse the engine's grounded bullet.
+function reconcileFit(llmFit: any, engineFit: string[], anchors: string[]): string[] {
+  const llm = Array.isArray(llmFit) ? llmFit.map(cleanLine).filter(Boolean) : [];
+  const kept = llm.filter((b) => bulletGrounded(b, anchors)).slice(0, 4);
+  // Backfill from the engine so we always have at least 2 solid bullets, no dupes.
+  const seen = new Set(kept.map((b) => b.toLowerCase()));
+  for (const e of engineFit) { if (kept.length >= 3) break; const c = cleanLine(e); if (c && !seen.has(c.toLowerCase())) { kept.push(c); seen.add(c.toLowerCase()); } }
+  return kept.length ? kept : engineFit;
+}
 
 export async function generatePathsLLM(profile: Profile, answers: Answers): Promise<AnalyzeResult | null> {
   if (!llmEnabled()) return null;
@@ -219,12 +245,14 @@ export async function generatePathsLLM(profile: Profile, answers: Answers): Prom
     if (!base.length) return null;
     const goal = answers.goal || answers.intent || "explore";
     const ctx = `Profile: ${profile.name}, ${profile.headlineTitle}${profile.headlineCompany ? ` at ${profile.headlineCompany}` : ""}, ${profile.totalYearsLabel}, domain ${profile.domain}, ${profile.city}.
+Seniority: ${profile.seniority}${profile.seniority === "grad" || profile.totalMonths < 24 ? " (early-career / recent grad — apply the PERSONA RULE)" : ""}.
 Skills: ${profile.skills.join(", ")}.
 Wins: ${profile.metrics.join(" | ") || "n/a"}.
 Goal: ${goal}.${answers.knownRole ? ` Target they named: "${answers.knownRole}".` : ""}
 Extra context from the person: ${answers.profileNote || "none provided"}.
 What a good work day looks like: ${answers.goodDay || "not yet specified"}.
 Priorities: ${answers.priorities?.join(", ") || "not yet specified"}.
+Constraints to respect: timeline ${answers.timeline || "not specified"}, risk appetite ${answers.risk || "balanced"}${answers.budget ? `, upskilling budget ${answers.budget}` : ""}${answers.workMode ? `, prefers ${answers.workMode} work` : ""}.
 The 3 pre-selected roles (use these titles verbatim):
 ${base.map((p, i) => `${i + 1}. ${p.title} — ${p.archetype}, median ${p.band.median}L, skills to build: ${p.skillsBuild.map((s) => s.name).join(", ")}`).join("\n")}`;
 
@@ -232,22 +260,91 @@ ${base.map((p, i) => `${i + 1}. ${p.title} — ${p.archetype}, median ${p.band.m
     const j = extractJSON<any>(raw);
     if (!j) return { paths: base, tension: String(j?.tension || base.length ? generatePaths(profile, answers).tension : "") };
 
+    // Anchors = the real, lowercased facts about this person. A fit bullet must touch one of
+    // these to survive (skills, wins, domain, current title, years).
+    const anchors = [
+      ...profile.skills, ...profile.metrics,
+      profile.domain, profile.headlineTitle, profile.headlineCompany,
+      profile.totalYearsLabel, String(Math.round(profile.totalMonths / 12)),
+    ].filter(Boolean).map((s) => s.toLowerCase());
+
     // Merge LLM prose onto the catalogue paths (match by title; keep title/band/skills fixed).
     const llmByTitle = new Map<string, any>();
     if (Array.isArray(j.paths)) for (const p of j.paths) if (p?.title) llmByTitle.set(String(p.title).toLowerCase().trim(), p);
     const paths: CareerPath[] = base.map((p) => {
       const e = llmByTitle.get(p.title.toLowerCase().trim());
+      const llmWhat = e && Array.isArray(e.whatItDoes)
+        ? e.whatItDoes.map(cleanLine).filter((s: string) => s.length >= 8 && s.split(" ").length <= 20).slice(0, 2)
+        : [];
       return {
         ...p,
-        fit: e && Array.isArray(e.fit) && e.fit.length ? e.fit.slice(0, 4).map(String) : p.fit,
-        whatItDoes: e && Array.isArray(e.whatItDoes) && e.whatItDoes.length
-          ? [...e.whatItDoes.slice(0, 2).map(String), p.whatItDoes[1]].filter(Boolean)
-          : p.whatItDoes,
+        fit: reconcileFit(e?.fit, p.fit, anchors),
+        whatItDoes: llmWhat.length ? [...llmWhat, p.whatItDoes[1]].filter(Boolean) : p.whatItDoes,
       };
     });
-    return { paths, tension: String(j.tension || "").trim() || generatePaths(profile, answers).tension };
+    const tension = cleanLine(j.tension || "");
+    return { paths, tension: tension.length > 20 ? tension : generatePaths(profile, answers).tension };
   } catch (e) {
     console.warn("generatePathsLLM fallback:", (e as Error).message);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2b) ROADMAP — the engine owns the structure (phases, dates, progress weights);
+//     the LLM rewrites only the TASK TEXT so each week is specific to this person's
+//     gaps, target role, and timeline. Dates + pct never come from the model, so the
+//     progress bar math can't be broken by a hallucination. Falls back to the engine.
+// ---------------------------------------------------------------------------
+const ROADMAP_SYS = `You are Navi+, a career strategist building a concrete week-by-week plan for ONE person moving into a target role in India. You are given the plan's phases and, for each phase, how many tasks it needs. Rewrite the TASKS so they are specific, do-able actions tailored to THIS person's gaps and target role, not generic advice.
+
+RULES:
+- Return EXACTLY the same number of phases, in the same order, each with EXACTLY the requested number of tasks.
+- Each task is one concrete action starting with a verb, max 18 words. Something they could literally do this week.
+- Use the person's real target role, named gaps, and current title. Reference the actual gap names where a task is about closing a gap.
+- No fluff, no "network more" or "be confident". Name the artifact, the number, or the channel.
+- Never use em dashes (—); use commas, colons, or periods.
+
+Return ONLY JSON: {"phases": [ {"tasks": string[]} ]}`;
+
+export async function generateRoadmapLLM(profile: Profile, path: CareerPath, answers: Answers): Promise<RoadmapPhase[] | null> {
+  if (!llmEnabled()) return null;
+  // The engine owns phase names, week spans, and progress weights.
+  const scaffold = buildRoadmap(path, answers);
+  if (!scaffold.length) return null;
+  try {
+    const gaps = path.skillsBuild.map((s) => `${s.name}${s.closesWith ? ` (close via ${s.closesWith})` : ""}`).join("; ") || "none specified";
+    const ctx = `Person: ${profile.name}, currently ${profile.headlineTitle}, ${profile.totalYearsLabel}, ${profile.domain}.
+Target role: ${path.title} (median ${path.band.median}L). Timeline: ${answers.timeline || "6-8 months"}. Risk appetite: ${answers.risk || "balanced"}.
+Their specific gaps to close: ${gaps}.
+Top current strengths to build on: ${(path.skillsHave || profile.skills).slice(0, 5).join(", ") || "n/a"}.
+The phases (rewrite each phase's tasks, keep the counts):
+${scaffold.map((ph, i) => `Phase ${i + 1}: "${ph.name}" (${ph.weeks}) needs ${ph.tasks.length} tasks. Current intent: ${ph.tasks.map((t) => t.text).join(" | ")}`).join("\n")}`;
+
+    const raw = await complete(ROADMAP_SYS, ctx, 900, true);
+    const j = extractJSON<any>(raw);
+    const llmPhases: any[] = j && Array.isArray(j.phases) ? j.phases : [];
+    if (!llmPhases.length) return null;
+
+    // Merge: keep engine name/weeks/pct/done; swap in a task's text only when the LLM gave a
+    // valid, non-generic replacement for that exact slot. Anything missing stays as the engine wrote it.
+    let replaced = 0;
+    const merged: RoadmapPhase[] = scaffold.map((ph, pi) => {
+      const llmTasks: string[] = Array.isArray(llmPhases[pi]?.tasks) ? llmPhases[pi].tasks.map(cleanLine) : [];
+      return {
+        ...ph,
+        tasks: ph.tasks.map((t, ti) => {
+          const cand = llmTasks[ti];
+          const ok = cand && cand.length >= 10 && cand.split(" ").length <= 22 && !BANNED_FIT.test(cand);
+          if (ok) replaced++;
+          return ok ? { ...t, text: cand } : t;
+        }),
+      };
+    });
+    // If the model barely changed anything, the engine version is just as good, no point claiming AI.
+    return replaced >= 3 ? merged : scaffold;
+  } catch (e) {
+    console.warn("generateRoadmapLLM fallback:", (e as Error).message);
     return null;
   }
 }

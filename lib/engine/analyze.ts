@@ -4,7 +4,7 @@ import { estimateBand } from "../../data/salaryBands";
 import { fmtLPA } from "./outcome";
 import {
   ROLES, type CareerRole, type RoleLevel,
-  findRole, matchRoles, growthFrom, adjacentTo, levelRank,
+  findRole, matchRoles, growthFrom, adjacentTo, levelRank, levelFromYears, levelOf,
 } from "../../data/roles";
 
 // ---------------------------------------------------------------------------
@@ -30,14 +30,30 @@ function closeTitle(a: string, b: string): boolean {
   return hit === small.size && Math.abs(A.size - B.size) <= 1;
 }
 
-function seniorityToLevel(s: Profile["seniority"]): RoleLevel {
-  return ({ grad: "entry", early: "mid", mid: "senior", senior: "lead", leader: "director" } as const)[s] || "mid";
+// Level implied by the candidate's current TITLE. A title can lift them at most one rung above
+// their years-based level (so "Lead" on a 1-yr résumé doesn't read as a real lead).
+function titleLevel(title: string): RoleLevel {
+  const t = ` ${norm(title)} `;
+  if (/chief|cxo| ceo | cto | cfo | coo | cmo | cro | cpo /.test(t)) return "exec";
+  if (/ vp | svp | evp |vice president/.test(t)) return "vp";
+  if (/director|head of/.test(t)) return "director";
+  if (/principal|staff|group product| gpm | lead |senior manager/.test(t)) return "lead";
+  if (/senior| sr /.test(t)) return "senior";
+  if (/associate|analyst|representative| sdr | bdr |coordinator|intern|junior|trainee|fellow|graduate/.test(t)) return "entry";
+  return "mid";
+}
+// The candidate's TRUE level = higher of (years-based, title-based), capped at years+1.
+// This is what stops a 4-yr SDR being treated as "senior/lead" off the résumé.
+function trueLevel(profile: Profile): RoleLevel {
+  const yRank = levelRank(levelFromYears(profile.totalMonths / 12));
+  const tRank = levelRank(titleLevel(profile.headlineTitle || ""));
+  return levelOf(Math.min(Math.max(yRank, tRank), yRank + 1));
 }
 
 function anchorRole(profile: Profile): CareerRole {
   return (
     findRole(profile.headlineTitle) ||
-    matchRoles({ skills: profile.skills, domain: profile.domain, level: seniorityToLevel(profile.seniority), limit: 1 })[0] ||
+    matchRoles({ skills: profile.skills, domain: profile.domain, level: trueLevel(profile), limit: 1 })[0] ||
     ROLES[0]
   );
 }
@@ -158,8 +174,8 @@ function riskForStep(step: number, crossDomain: boolean): string {
   return "Very low";
 }
 
-function pathFromRole(role: CareerRole, profile: Profile, rank: number, direction: string, anchorDomain: string): CareerPath {
-  const baseLevel = seniorityToLevel(profile.seniority);
+function pathFromRole(role: CareerRole, profile: Profile, rank: number, direction: string, anchorDomain: string, needsMba = false): CareerPath {
+  const baseLevel = trueLevel(profile);
   const step = levelRank(role.level) - levelRank(baseLevel);
   const crossDomain = norm(role.domain) !== norm(anchorDomain);
   const skillsBuild = buildSkillItems(profile, role);
@@ -167,6 +183,7 @@ function pathFromRole(role: CareerRole, profile: Profile, rank: number, directio
     id: `path-${role.id}`,
     title: role.title,
     archetype: role.archetype,
+    domain: role.domain,
     bestMatch: rank === 0,
     matchPct: matchPctFor(profile, role, baseLevel, anchorDomain),
     fit: fitBullets(profile, role, direction),
@@ -174,13 +191,14 @@ function pathFromRole(role: CareerRole, profile: Profile, rank: number, directio
     dayToDay: dayToDayFor(role),
     life: lifeAtRole(role),
     levelStep: Math.max(0, step),
+    needsMba,
     skillsHave: relevantHave(profile, role),
     skillsBuild,
     salaryFamily: role.level,
     band: { low: role.ctc.low, median: role.ctc.median, high: role.ctc.high },
     compare: {
       pay: fmtLPA(role.ctc.median),
-      time: timeForStep(step),
+      time: needsMba ? "1–2 yrs (MBA route)" : timeForStep(step),
       gap: `${skillsBuild.length} to build`,
       risk: riskForStep(step, crossDomain),
     },
@@ -203,11 +221,12 @@ function uniqRoles(arr: CareerRole[]): CareerRole[] {
  * Head of Growth, Strategy & BizOps, or GM (real skill overlap). Goal + risk only reshape the
  * ranking and the level-step ceiling; they never override track sanity.
  */
-function candidatesByGoal(profile: Profile, goal: string, current: CareerRole, risk?: string): { role: CareerRole; dir: string }[] {
-  const baseLevel = seniorityToLevel(profile.seniority);
+function candidatesByGoal(profile: Profile, goal: string, current: CareerRole, risk?: string): { role: CareerRole; dir: string; needsMba: boolean }[] {
+  const baseLevel = trueLevel(profile);                    // honest level from experience + title
   const baseRank = levelRank(baseLevel);
   const anchorDomain = norm(current.domain);               // catalog track of the matched role
-  const stepCap = risk === "safe" ? 1 : 2;                 // appetite ceiling on level jumps
+  const mbaOK = risk === "bold";                           // a 2-rung jump is only on the table if bold
+  const maxEff = mbaOK ? 2 : 1;                            // cap moves to 1 jump (2 ⇒ MBA-track)
   const allowHop2 = risk === "bold" || goal === "explore"; // widen the credible net when bold/exploring
 
   const hop1 = uniqRoles([...growthFrom(current), ...adjacentTo(current)]);
@@ -217,7 +236,7 @@ function candidatesByGoal(profile: Profile, goal: string, current: CareerRole, r
   const anyDom = matchRoles({ skills: profile.skills, level: baseLevel, limit: 16 });
   const pool = uniqRoles([...hop1, ...hop2, ...sameDom, ...anyDom]).filter((r) => r.id !== current.id);
 
-  type Scored = { role: CareerRole; dir: string; score: number };
+  type Scored = { role: CareerRole; dir: string; score: number; needsMba: boolean };
   const appetite = (step: number) =>
     (risk === "bold" ? [0, 3, 6] : risk === "safe" ? [6, 2, -3] : [3, 5, 2])[Math.min(2, Math.max(0, step))];
 
@@ -226,19 +245,19 @@ function candidatesByGoal(profile: Profile, goal: string, current: CareerRole, r
     const step = levelRank(r.level) - baseRank;
     const cross = norm(r.domain) !== anchorDomain;
     const fit = fitScore(profile, r, current.domain);
-    // hard gates
-    if (step < 0) continue;                        // never recommend a downgrade
-    if (step > stepCap) continue;                  // respect the user's appetite
-    // Cross-track gating. A director-level commercial pivot (Head of Growth, Strategy, Sales
-    // Director) is credible on affinity. But jumping tracks INTO a VP/exec seat (CTO, COO, CMO,
-    // VP Design) demands real skill overlap, not just adjacency — so those need a much higher bar.
+    const effJump = step + (cross ? 1 : 0);        // switching tracks counts as an extra rung of difficulty
+    // realistic-jump gates: at most 1 designation jump (2 only if bold ⇒ flagged MBA-track).
+    if (!cross && step < 0) continue;              // no in-track downgrade
+    if (cross && step < -1) continue;              // cross-track can re-enter at most one rung lower
+    if (effJump > maxEff) continue;                // this is what stops an SDR being offered GPM/VP
+    // A cross-track move must still be credible on skills+affinity (esp. into VP/exec seats).
     const crossCeil = levelRank(r.level) >= levelRank("vp") ? 0.52 : 0.36;
     if (cross && fit < crossCeil) continue;
 
     let s = fit * 50;                              // credibility (skills + track affinity) dominates
     if (graphIds.has(r.id)) s += 10;              // researched, real transition
     s += cross ? 0 : 6;                            // gently prefer staying in-track
-    s += appetite(step);
+    s += appetite(Math.max(0, step));
     if (goal === "earn") s += Math.min(22, r.ctc.median / 12);
     else if (goal === "grow") s += (cross ? 0 : 8) + (step >= 1 ? 6 : 0);
     else if (goal === "switch") s += cross ? 20 : -8;   // strongly favour a genuine lane change
@@ -246,7 +265,7 @@ function candidatesByGoal(profile: Profile, goal: string, current: CareerRole, r
     if (r.demand === "high") s += 2;
 
     const dir = cross ? "switch" : step >= 1 ? "grow" : "adjacent";
-    scored.push({ role: r, dir, score: s });
+    scored.push({ role: r, dir, score: s, needsMba: step >= 2 });
   }
   scored.sort((a, b) => b.score - a.score);
 
@@ -262,9 +281,9 @@ function candidatesByGoal(profile: Profile, goal: string, current: CareerRole, r
   }
   for (const c of scored) { if (picked.length >= 6) break; if (!picked.includes(c)) picked.push(c); }
   // last-resort fallback so we always return something
-  if (!picked.length) for (const r of growthFrom(current).concat(sameDom).slice(0, 3)) picked.push({ role: r, dir: "grow", score: 0 });
+  if (!picked.length) for (const r of growthFrom(current).concat(sameDom).slice(0, 3)) picked.push({ role: r, dir: "grow", score: 0, needsMba: false });
 
-  return picked.map((c) => ({ role: c.role, dir: c.dir }));
+  return picked.map((c) => ({ role: c.role, dir: c.dir, needsMba: c.needsMba }));
 }
 
 export function generatePaths(profile: Profile, answers: Answers): AnalyzeResult {
@@ -277,16 +296,17 @@ export function generatePaths(profile: Profile, answers: Answers): AnalyzeResult
   if (answers.knownRole && answers.knownRole.trim().length > 2) {
     const known = findRole(answers.knownRole);
     const strong = known && closeTitle(known.title, answers.knownRole);
-    const hero = strong ? pathFromRole(known!, profile, 0, "grow", anchorDom) : synthesizePath(answers.knownRole.trim(), profile, 0);
+    const heroMba = !!known && levelRank(known.level) - levelRank(trueLevel(profile)) >= 2;
+    const hero = strong ? pathFromRole(known!, profile, 0, "grow", anchorDom, heroMba) : synthesizePath(answers.knownRole.trim(), profile, 0);
     const rest = candidatesByGoal(profile, goal, current, answers.risk).filter((c) => c.role.id !== known?.id).slice(0, 2);
-    const paths = dedupPaths([hero, ...rest.map((c, i) => pathFromRole(c.role, profile, i + 1, c.dir, anchorDom))]);
+    const paths = dedupPaths([hero, ...rest.map((c, i) => pathFromRole(c.role, profile, i + 1, c.dir, anchorDom, c.needsMba))]);
     return { paths, tension: buildTension(profile, goal) };
   }
 
   const cands = candidatesByGoal(profile, goal, current, answers.risk);
   // Keep the GOAL-aware order (switch leads with a pivot, earn with the upside play) so the
   // three feel different per goal; mark "Best match" as the genuinely highest-fit role.
-  const paths = dedupPaths(cands.map((c, i) => pathFromRole(c.role, profile, i, c.dir, anchorDom))).slice(0, 3);
+  const paths = dedupPaths(cands.map((c, i) => pathFromRole(c.role, profile, i, c.dir, anchorDom, c.needsMba))).slice(0, 3);
   if (paths.length) {
     const top = paths.reduce((a, b) => (b.matchPct > a.matchPct ? b : a), paths[0]);
     paths.forEach((p) => (p.bestMatch = p === top));
@@ -315,15 +335,19 @@ function legacyGoal(intent?: string): string {
 function synthesizePath(title: string, profile: Profile, rank: number): CareerPath {
   const years = profile.totalMonths / 12;
   const band = estimateBand(title, years, profile.city);
+  const step = levelRank(titleLevel(title)) - levelRank(trueLevel(profile)); // how far the named role is
+  const needsMba = step >= 2;
   return {
-    id: "path-known", title, archetype: "generic", bestMatch: rank === 0, matchPct: 86,
+    id: "path-known", title, archetype: "generic", domain: profile.domain, bestMatch: rank === 0, matchPct: needsMba ? 70 : 86,
     fit: ["You already know your target — we skip discovery and go straight to the gap, the math, and the plan.", profile.metrics[0] ? `Your proof: "${profile.metrics[0]}".` : `Built over ${profile.totalYearsLabel}.`],
     whatItDoes: ["The role you named — we'll map your exact gap to it.", "Outcome math grounded in your numbers.", "A week-by-week plan to land it."],
+    levelStep: Math.max(0, step),
+    needsMba,
     skillsHave: profile.skills.slice(0, 5),
     // Off-catalog role: seed sensible, course-mapped gaps so the gap map / plan aren't empty.
     skillsBuild: buildSkillItems(profile, { coreSkills: ["P&L ownership", "Executive communication", "Stakeholder leadership"], id: "", title, domain: "", archetype: "", level: "lead", description: "", ctc: band, niceToHave: [], growthRoles: [], adjacentRoles: [], topCompanies: [], demand: "medium", moneyPotential: "medium" }),
     salaryFamily: "lead", band: { low: band.low, median: band.median, high: band.high },
-    compare: { pay: fmtLPA(band.median), time: "3–6 mo", gap: "3 to build", risk: "Low" },
+    compare: { pay: fmtLPA(band.median), time: needsMba ? "1–2 yrs (MBA route)" : "3–6 mo", gap: "3 to build", risk: needsMba ? "Medium-high" : "Low" },
   };
 }
 
@@ -332,7 +356,7 @@ export function suggestMore(profile: Profile, shown: string[]): { paths: CareerP
   const current = anchorRole(profile);
   const shownIds = new Set(shown.map((t) => findRole(t)?.id).filter(Boolean) as string[]);
   const pool = candidatesByGoal(profile, "explore", current).filter((c) => !shownIds.has(c.role.id) && !shown.some((t) => norm(t) === norm(c.role.title)));
-  const more = pool.slice(0, 2).map((c, i) => pathFromRole(c.role, profile, i + 3, c.dir, current.domain));
+  const more = pool.slice(0, 2).map((c, i) => pathFromRole(c.role, profile, i + 3, c.dir, current.domain, c.needsMba));
   const closing = more.length
     ? "These are the adjacent moves worth a look. Beyond this you're stretching past what your experience supports right now — better to go deep on a strong match than keep widening the net."
     : "That's the full set of strong-fit roles for your profile right now. Going wider would mean roles your experience doesn't yet support — pick from the strong matches instead.";

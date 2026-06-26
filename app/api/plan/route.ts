@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { computeOutcome } from "@/lib/engine/outcome";
 import { buildRoadmap } from "@/lib/engine/roadmap";
+import { generateRoadmapLLM } from "@/lib/ai";
 import { chooseOffers } from "@/lib/engine/conversion";
 import { companiesForArchetypes } from "@/data/companies";
-import { jobsForArchetypes } from "@/data/jobs";
-import { mentorForArchetype } from "@/data/mentors";
+import { scoreJobsForPath } from "@/data/jobs";
+import { matchMentor } from "@/data/mentors";
 import { db } from "@/lib/db";
 import type { Profile, Answers, CareerPath, PlanResult } from "@/lib/types";
 
@@ -19,10 +20,11 @@ export async function POST(req: NextRequest) {
   const a = { ...(JSON.parse(session.answersJson || "{}") as Answers), ...(answers || {}) };
 
   const outcome = computeOutcome(profile, path, a);
-  const roadmap = buildRoadmap(path, a);
+  // LLM personalises the task text; engine owns dates + progress weights, and is the fallback.
+  const roadmap = (await generateRoadmapLLM(profile, path, a)) || buildRoadmap(path, a);
   const companies = companiesForArchetypes([path.archetype]);
-  const jobs = jobsForArchetypes([path.archetype]).map((j) => ({ ...j, matchPct: path.matchPct }));
-  const mentor = mentorForArchetype(path.archetype);
+  const jobs = scoreJobsForPath(profile, path);
+  const mentor = matchMentor(path, profile);
   const offers = chooseOffers(profile, a, outcome);
   const plan: PlanResult = { outcome, gap: path.skillsBuild, roadmap, companies, jobs, mentor, offers };
 

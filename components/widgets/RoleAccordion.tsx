@@ -34,6 +34,7 @@ export default function RoleAccordion({
           <div className={`path ${sel === p.id ? "sel" : ""}`} key={p.id}>
             <div className="path-h" onClick={() => { setOpen(isOpen ? "" : p.id); setSel(p.id); }}>
               <span className="nm">{p.title}</span>
+              {p.needsMba && <span className="mba-tag" title="A 2-level jump — typically made via an MBA">MBA-track</span>}
               {p.bestMatch && <span className="best">Best match</span>}
               <span className="radio" />
             </div>
@@ -41,6 +42,7 @@ export default function RoleAccordion({
               <div className="path-body">
                 <div className="fitlbl">◆ Why you are a fit</div>
                 <ul className="fit">{p.fit.slice(0, 3).map((f, i) => <li key={i}>{f}</li>)}</ul>
+                {p.needsMba && <div className="mba-note">↑ This is a <b>2-level jump</b> — most people make it via an MBA (fundable through Leap Finance), not a direct hop.</div>}
                 <div className="skills">
                   <div className="col have">
                     <h5>✓ Skills you have</h5>

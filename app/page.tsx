@@ -1,8 +1,10 @@
 import Link from "next/link";
+import LandingMotion from "@/components/LandingMotion";
 
 export default function Landing() {
   return (
     <>
+      <LandingMotion />
       <nav className="lp-nav">
         <div className="lp-nav-row">
           <div className="brand"><span className="logo">N</span> Navi<span className="plus">+</span></div>
@@ -20,9 +22,10 @@ export default function Landing() {
           <div className="hero-copy">
             <span className="hero-eyebrow">AI Career Strategist · India</span>
             <h1>Find your next career move, <span className="ital">and the proof it pays.</span></h1>
-            <p className="sub">Upload your résumé or share a portfolio. Navi+ reads your real history, maps it to <b>105 real roles</b>, and shows the outcome math (the salary, the odds, the cost), then builds the plan to get there.</p>
+            <p className="sub">Upload your résumé or share a portfolio. Navi+ reads your real history, finds the <b>3 roles you actually fit</b>, and shows the outcome math (the salary, the odds, the cost), then builds the plan to get there.</p>
             <div className="hero-cta">
               <Link className="btn lg" href="/chat?mode=live">Try it live with your résumé →</Link>
+              <Link className="btn lg hero-secondary" href="/chat?mode=demo">See a sample report</Link>
             </div>
             <span className="hero-note">2 min · no phone number · no gate · PDF, portfolio URL, or sample candidate</span>
             <div className="hero-trust">
@@ -35,9 +38,9 @@ export default function Landing() {
               <div className="oc-row">
                 <div><div className="oc-k">Today</div><div className="oc-v">₹8L</div></div>
                 <div className="oc-arrow">→</div>
-                <div><div className="oc-k">Target · median</div><div className="oc-v hot">₹16L</div></div>
+                <div><div className="oc-k">Target · median</div><div className="oc-v hot" data-hero-count data-from="8" data-to="16" data-prefix="₹" data-suffix="L">₹16L</div></div>
               </div>
-              <div className="oc-bar"><i style={{ width: "72%" }} /></div>
+              <div className="oc-bar"><i data-fill="72" style={{ width: "72%" }} /></div>
               <div className="oc-meta"><span><b>+100%</b> uplift</span><span><b>72%</b> confidence</span><span>range ₹13–19L</span></div>
               <div className="oc-foot">Grounded in India 2025-26 comp, not a vibe.</div>
             </div>
@@ -47,26 +50,26 @@ export default function Landing() {
 
       {/* VALUE PROPS - why take the assessment */}
       <section className="section">
-        <div className="sec-head">
+        <div className="sec-head reveal">
           <h2>Why take the assessment?</h2>
           <p className="lead">Most career advice is vibes. This is the one that hands you the numbers, and the next step.</p>
         </div>
         <div className="vp-grid">
-          {VALUE_PROPS.map((v) => (
-            <div className="vp" key={v.t}><div className="vp-ic">{v.ic}</div><h3>{v.t}</h3><p>{v.d}</p></div>
+          {VALUE_PROPS.map((v, i) => (
+            <div className="vp reveal" key={v.t} style={{ transitionDelay: `${i * 70}ms` }}><div className="vp-ic">{v.ic}</div><h3>{v.t}</h3><p>{v.d}</p></div>
           ))}
         </div>
       </section>
 
       {/* OUTCOME STORIES - real before→after */}
       <section className="section tinted" id="stories">
-        <div className="sec-head">
+        <div className="sec-head reveal">
           <h2>People who went beyond</h2>
           <p className="lead">Same starting point as you. Here&apos;s what the right move did for their number.</p>
         </div>
         <div className="story-grid">
-          {STORIES.map((s) => (
-            <div className="story" key={s.name}>
+          {STORIES.map((s, i) => (
+            <div className="story reveal" key={s.name} style={{ transitionDelay: `${i * 70}ms` }}>
               <div className="story-top">
                 <div className="story-av" style={{ background: s.color }}>{s.name[0]}</div>
                 <div><div className="story-name">{s.name}</div><div className="story-role">{s.from} → {s.to}</div></div>
@@ -75,6 +78,7 @@ export default function Landing() {
                 <span className="sj-old">{s.before}</span><span className="sj-arrow">→</span><span className="sj-new">{s.after}</span>
                 <span className="sj-pct">{s.pct}</span>
               </div>
+              <div className="story-bar"><i style={{ "--w": `${Math.min(100, parseInt(s.pct, 10))}%` } as React.CSSProperties} /></div>
               <p className="story-how">{s.how}</p>
             </div>
           ))}
@@ -83,14 +87,14 @@ export default function Landing() {
 
       {/* HOW IT WORKS */}
       <section className="section" id="how">
-        <div className="sec-head"><h2>How it works</h2><p className="lead">No phone gate, no interrogation. Value first, then the plan.</p></div>
+        <div className="sec-head reveal"><h2>How it works</h2><p className="lead">No phone gate, no interrogation. Value first, then the plan.</p></div>
         <div className="how-grid">
           <div className="how-list">
-            <div className="how-step"><div className="n">01</div><h3>Reads your résumé</h3><p>Skills, gaps & strengths from your real history, with dates reconciled and no phantom gaps.</p></div>
-            <div className="how-step"><div className="n">02</div><h3>Maps you to real roles & the math</h3><p>Three fitting roles from a 105-role catalogue, side by side, each with honest outcome math.</p></div>
-            <div className="how-step"><div className="n">03</div><h3>Builds your roadmap</h3><p>A habit-based plan, the companies you fit, live openings, and a matched mentor.</p></div>
+            <div className="how-step reveal"><div className="n">01</div><h3>Reads your résumé</h3><p>Skills, gaps & strengths from your real history, with dates reconciled and no phantom gaps.</p></div>
+            <div className="how-step reveal" style={{ transitionDelay: "80ms" }}><div className="n">02</div><h3>Maps you to real roles & the math</h3><p>Three roles that actually fit, side by side, each with honest outcome math.</p></div>
+            <div className="how-step reveal" style={{ transitionDelay: "160ms" }}><div className="n">03</div><h3>Builds your roadmap</h3><p>A habit-based plan, the companies you fit, live openings, and a matched mentor.</p></div>
           </div>
-          <div className="phone">
+          <div className="phone reveal" style={{ transitionDelay: "120ms" }}>
             <div className="screen">
               <div className="mock-head"><div className="mock-bolt">⚡</div><div className="mock-title">Top Skills</div></div>
               <div className="chip-rows">
@@ -106,20 +110,20 @@ export default function Landing() {
 
       {/* STAT BAND */}
       <section className="statband">
-        <div className="statband-in">
-          <div className="stat"><b>105</b><span>roles mapped</span></div>
-          <div className="stat"><b>6</b><span>career domains</span></div>
+        <div className="statband-in reveal">
+          <div className="stat"><b data-stat-count data-from="0" data-to="3">3</b><span>best-fit roles, side by side</span></div>
+          <div className="stat"><b data-stat-count data-from="0" data-to="6">6</b><span>career domains</span></div>
           <div className="stat"><b>2025-26</b><span>India comp data</span></div>
-          <div className="stat"><b>4</b><span>paths: grow · switch · earn · explore</span></div>
+          <div className="stat"><b data-stat-count data-from="0" data-to="4">4</b><span>paths: grow · switch · earn · explore</span></div>
         </div>
       </section>
 
       {/* TESTIMONIALS */}
       <section className="section">
-        <div className="sec-head"><h2>What users are saying</h2></div>
+        <div className="sec-head reveal"><h2>What users are saying</h2></div>
         <div className="tcards">
-          {TESTIMONIALS.map((t) => (
-            <div className="tcard" key={t.name}>
+          {TESTIMONIALS.map((t, i) => (
+            <div className="tcard reveal" key={t.name} style={{ transitionDelay: `${i * 70}ms` }}>
               <div className="q">“{t.q}”</div>
               <div className="who"><div className="av-img" style={{ background: t.color }}>{t.name[0]}</div><div><b>{t.name}</b><small>{t.role}</small></div></div>
             </div>
@@ -129,9 +133,9 @@ export default function Landing() {
 
       {/* FINAL CTA */}
       <section className="finalcta">
-        <h2>Your next move, with the numbers behind it.</h2>
-        <p>Two minutes. No gate. See what you&apos;re really worth.</p>
-        <div className="finalcta-row">
+        <h2 className="reveal">Your next move, with the numbers behind it.</h2>
+        <p className="reveal" style={{ transitionDelay: "70ms" }}>Two minutes. No gate. See what you&apos;re really worth.</p>
+        <div className="finalcta-row reveal" style={{ transitionDelay: "140ms" }}>
           <Link className="btn lg dark" href="/chat?mode=live">Try it live with your résumé →</Link>
         </div>
       </section>
@@ -147,7 +151,7 @@ export default function Landing() {
 const VALUE_PROPS = [
   { ic: "₹", t: "Know your real market value", d: "A grounded salary range for every move (low, median, high) from India 2025-26 comp data, not a guess." },
   { ic: "⚖", t: "Decide, don't just dream", d: "Three fitting roles side by side with match %, pay, time, and risk. The actual decision screen." },
-  { ic: "🧭", t: "Go beyond your lane", d: "See where you can grow, switch, or earn more, across 105 roles and 6 domains, mapped to your skills." },
+  { ic: "🧭", t: "Go beyond your lane", d: "See where you can grow, switch, or earn more, across 6 career domains, mapped to your skills." },
   { ic: "✅", t: "A plan you'll follow", d: "Habit-based roadmap, courses mapped to your exact gaps, live job openings, and a mentor who made the move." },
 ];
 

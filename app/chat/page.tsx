@@ -569,7 +569,7 @@ function ResumeAnalysisLoader() {
     "Reading your story, not just your job titles",
     "Finding proof of impact and transferable strengths",
     "Reconciling overlapping roles and career dates",
-    "Mapping your experience to 105 career paths",
+    "Mapping your experience to the roles you fit",
   ];
   const [message, setMessage] = useState(0);
   useEffect(() => {
