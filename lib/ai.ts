@@ -63,7 +63,10 @@ async function complete(system: string, user: string, maxTokens = 1200, json = f
     const model = process.env.OPENAI_MODEL || "gpt-5.4-mini";
     const res = await c.chat.completions.create({
       model,
-      max_tokens: maxTokens,
+      // GPT-5 family rejects `max_tokens` (400) and requires `max_completion_tokens`.
+      // This param name is accepted by all current OpenAI chat models, so it's safe
+      // even if OPENAI_MODEL is pinned back to gpt-4o-mini.
+      max_completion_tokens: maxTokens,
       ...(json ? { response_format: { type: "json_object" } } : {}),
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
     });
@@ -171,7 +174,14 @@ function profileFromResumeJSON(j: any, sourceText: string, fileName: string): Pr
     endMonths: monthIndex(r.end),
     bullets: Array.isArray(r.bullets) ? r.bullets.slice(0, 5).map((b: any) => String(b).slice(0, 200)) : [],
   }));
-  const { totalMonths, reconciledNote } = reconcileExperience(roles, sourceText);
+  const llmRecon = reconcileExperience(roles, sourceText);
+  // Floor years against the deterministic parser. The LLM occasionally drops an early-career
+  // role on a given run, undercounting a 12-yr career as ~8 yrs, which then collapses the
+  // candidate's level. The regex parser reads role date-ranges independently, so take the
+  // longer of the two spans — never read a senior career as junior because of parse variance.
+  const detMonths = parseProfile(sourceText, fileName).totalMonths;
+  const totalMonths = Math.max(llmRecon.totalMonths, detMonths);
+  const reconciledNote = llmRecon.reconciledNote;
   const titlesBlob = roles.map((r) => r.title).join(" ");
   const skills: string[] = Array.isArray(j.skills) ? j.skills.map((s: any) => String(s)).slice(0, 15) : [];
   const metrics: string[] = Array.isArray(j.metrics) ? j.metrics.map((s: any) => String(s)).slice(0, 6) : [];

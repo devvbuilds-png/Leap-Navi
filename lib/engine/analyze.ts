@@ -42,12 +42,21 @@ function titleLevel(title: string): RoleLevel {
   if (/associate|analyst|representative| sdr | bdr |coordinator|intern|junior|trainee|fellow|graduate/.test(t)) return "entry";
   return "mid";
 }
-// The candidate's TRUE level = higher of (years-based, title-based), capped at years+1.
-// This is what stops a 4-yr SDR being treated as "senior/lead" off the résumé.
+// The candidate's TRUE level. Two failure modes we guard against, in tension:
+//   (a) a 4-yr SDR who put "Lead" on the résumé must NOT read as a real lead, and
+//   (b) a 12-yr Associate Director whom the parser under-read (wrong headline / undercounted
+//       years on one run) must NOT collapse to "senior/lead" and get lateral IC roles.
+// Fix: the title signal is the MAX level across ALL their roles (not just the one headline the
+// LLM happened to surface), and at senior experience (>=5 yrs) we TRUST that title outright —
+// real director/VP/chief titles aren't handed to juniors. Below that we still cap title at
+// years+1 so early-career inflation can't promote anyone.
 function trueLevel(profile: Profile): RoleLevel {
-  const yRank = levelRank(levelFromYears(profile.totalMonths / 12));
-  const tRank = levelRank(titleLevel(profile.headlineTitle || ""));
-  return levelOf(Math.min(Math.max(yRank, tRank), yRank + 1));
+  const years = profile.totalMonths / 12;
+  const yRank = levelRank(levelFromYears(years));
+  const titles = [profile.headlineTitle, ...(profile.roles || []).map((r) => r.title)];
+  const tRank = Math.max(0, ...titles.map((t) => levelRank(titleLevel(t || ""))));
+  if (years >= 5) return levelOf(Math.max(yRank, tRank)); // experienced: trust the most senior real title
+  return levelOf(Math.min(Math.max(yRank, tRank), yRank + 1)); // early-career: cap title inflation
 }
 
 function anchorRole(profile: Profile): CareerRole {
