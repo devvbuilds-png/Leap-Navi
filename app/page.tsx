@@ -25,7 +25,6 @@ export default function Landing() {
             <p className="sub">Upload your résumé or share a portfolio. Navi+ reads your real history, finds the <b>3 roles you actually fit</b>, and shows the outcome math (the salary, the odds, the cost), then builds the plan to get there.</p>
             <div className="hero-cta">
               <Link className="btn lg" href="/chat?mode=live">Try it live with your résumé →</Link>
-              <Link className="btn lg hero-secondary" href="/chat?mode=demo">See a sample report</Link>
             </div>
             <span className="hero-note">2 min · no phone number · no gate · PDF, portfolio URL, or sample candidate</span>
             <div className="hero-trust">
