@@ -1,0 +1,103 @@
+// Navi+ data model. SQLite for zero-setup local dev; switch provider to postgres for prod.
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider  = "postgresql"
+  // Pooled connection (Supabase "Transaction" pooler, port 6543) — used by the running app.
+  url       = env("DATABASE_URL")
+  // Direct connection (port 5432) — used only for creating tables / migrations.
+  directUrl = env("DIRECT_URL")
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  // Parsed + reconciled resume profile (JSON string)
+  profileJson String?
+  // Conversation state, chosen path, constraints, generated plan (JSON strings)
+  answersJson String?
+  pathsJson   String?
+  chosenPath  String?
+  planJson    String?
+  // Conversion: which offer the user was routed to + whether they engaged
+  offerKind   String?
+  converted   Boolean  @default(false)
+  events      Event[]
+}
+
+// Lightweight analytics — this is how we'd measure the teardown's success metrics
+model Event {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  name      String   // e.g. resume_parsed, paths_generated, path_picked, outcome_viewed, offer_shown, offer_clicked
+  metaJson  String?
+  createdAt DateTime @default(now())
+}
+
+// Static "research" knowledge base is seeded here so it's queryable + editable in prod.
+model Company {
+  id        String @id @default(cuid())
+  name      String
+  archetype String // e.g. "quick-commerce", "b2b-saas", "ai-infra"
+  stage     String // "Series B/C", "Public", "Seed"
+  why       String
+  hiringFor String
+}
+
+// Matched job openings (the "Jobs" tab feed).
+model Job {
+  id        String @id @default(cuid())
+  title     String
+  company   String
+  archetype String
+  location  String
+  comp      String
+  posted    String
+  mustHaves String // JSON-encoded string[]
+}
+
+// Course catalogue mapped to the skill-gap each closes (Rec #6).
+model Course {
+  id       String  @id @default(cuid())
+  skill    String
+  title    String
+  provider String
+  hours    Int
+  free     Boolean @default(false)
+  level    String
+  blurb    String
+}
+
+// The career-role catalogue (105 roles) — queryable knowledge base for path-mapping.
+model Role {
+  id           String @id
+  title        String
+  domain       String
+  archetype    String
+  level        String
+  description  String
+  ctcLow       Int
+  ctcMedian    Int
+  ctcHigh      Int
+  coreSkills   String // JSON string[]
+  niceToHave   String // JSON string[]
+  growthRoles  String // JSON string[]
+  adjacentRoles String // JSON string[]
+  topCompanies String // JSON string[]
+  demand       String
+  moneyPotential String
+}
+
+// Named, matched mentors (Rec #8) — the opposite of faceless avatars.
+model Mentor {
+  id        String @id @default(cuid())
+  archetype String
+  name      String
+  initials  String
+  role      String
+  matchNote String
+  gets      String // JSON-encoded string[]
+  slot      String
+}
