@@ -196,6 +196,10 @@ button{font-family:inherit;cursor:pointer}
 .profile-grid input:focus,.role-edit input:focus{outline:none;border-color:var(--indigo)}
 .roles-edit{margin-top:16px}
 .role-edit{display:grid;grid-template-columns:1.25fr 1fr;gap:8px;margin-top:6px}
+.role-edit-head{margin-top:8px}
+.role-edit-head span{font-size:10.5px;color:var(--ink-faint);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.add-role{width:100%;margin-top:10px;padding:10px;border:1px dashed var(--line-2);border-radius:10px;background:transparent;color:var(--indigo);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:.16s}
+.add-role:hover{border-color:var(--indigo);background:var(--indigo-tint)}
 .error-note{margin:10px 0;padding:11px 13px;border:1px solid #FECACA;border-radius:12px;background:#FEF2F2;color:#B91C1C;font-size:13px;line-height:1.45}
 .reconcile{margin-top:14px;font-size:13px;color:var(--green);background:var(--green-soft);border:1px solid var(--green-line);border-radius:12px;padding:11px 13px;display:flex;gap:8px}
 .edit-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
@@ -355,7 +359,7 @@ button{font-family:inherit;cursor:pointer}
 .offer .go{color:var(--indigo);font-weight:700;font-size:18px}
 
 @media(max-width:480px){.om-top,.skills,.co-grid{grid-template-columns:1fr}.gap-row{grid-template-columns:1fr}}
-@media(max-width:480px){.profile-grid,.role-edit{grid-template-columns:1fr}}
+@media(max-width:480px){.profile-grid,.role-edit{grid-template-columns:1fr}.role-edit-head{display:none}}
 @media(max-width:480px){.portfolio-row{grid-template-columns:1fr}.portfolio-row .btn{width:100%}}
 
 /* =================== LANDING v2 (desktop-first, responsive) =================== */

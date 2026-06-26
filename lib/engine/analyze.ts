@@ -53,8 +53,8 @@ function titleLevel(title: string): RoleLevel {
 function trueLevel(profile: Profile): RoleLevel {
   const years = profile.totalMonths / 12;
   const yRank = levelRank(levelFromYears(years));
-  const titles = [profile.headlineTitle, ...(profile.roles || []).map((r) => r.title)];
-  const tRank = Math.max(0, ...titles.map((t) => levelRank(titleLevel(t || ""))));
+  const titles = [profile.headlineTitle, ...(profile.roles || []).map((r) => r.title)].filter((t) => t && t.trim());
+  const tRank = titles.length ? Math.max(0, ...titles.map((t) => levelRank(titleLevel(t)))) : 0;
   if (years >= 5) return levelOf(Math.max(yRank, tRank)); // experienced: trust the most senior real title
   return levelOf(Math.min(Math.max(yRank, tRank), yRank + 1)); // early-career: cap title inflation
 }

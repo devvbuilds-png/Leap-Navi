@@ -141,10 +141,13 @@ export default function Chat() {
   async function startChat() {
     if (!profile || profileSaving) return;
     setProfileSaving(true); setError("");
+    // Drop any experience rows the user added but left blank, so they don't skew counts or level.
+    const clean: Profile = { ...profile, roles: profile.roles.filter((r) => (r.title?.trim() || r.company?.trim())) };
+    setProfile(clean);
     const saved = await fetch("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, profile }),
+      body: JSON.stringify({ sessionId, profile: clean }),
     }).then((r) => r.json()).catch(() => ({ error: "Could not save your profile. Please try again." }));
     setProfileSaving(false);
     if (saved.error) { setError(saved.error); return; }
@@ -406,18 +409,27 @@ export default function Chat() {
                 </div>
                 <div className="roles-edit">
                   <div className="roles-edit-title">Experience</div>
-                  {profile.roles.slice(0, 5).map((role, index) => (
+                  <div className="role-edit role-edit-head" aria-hidden="true">
+                    <span>Role / title</span>
+                    <span>Company</span>
+                  </div>
+                  {profile.roles.slice(0, 10).map((role, index) => (
                     <div className="role-edit" key={index}>
-                      <input aria-label={`Role ${index + 1} title`} value={role.title} onChange={(e) => setProfile({
+                      <input aria-label={`Role ${index + 1} title`} placeholder="Role / title" value={role.title} onChange={(e) => setProfile({
                         ...profile,
                         roles: profile.roles.map((item, i) => i === index ? { ...item, title: e.target.value } : item),
                       })} />
-                      <input aria-label={`Role ${index + 1} company`} value={role.company} onChange={(e) => setProfile({
+                      <input aria-label={`Role ${index + 1} company`} placeholder="Company" value={role.company} onChange={(e) => setProfile({
                         ...profile,
                         roles: profile.roles.map((item, i) => i === index ? { ...item, company: e.target.value } : item),
                       })} />
                     </div>
                   ))}
+                  {profile.roles.length < 10 && (
+                    <button type="button" className="add-role" onClick={() => setProfile({ ...profile, roles: [...profile.roles, { title: "", company: "", bullets: [] }] })}>
+                      + Add experience
+                    </button>
+                  )}
                 </div>
                 {profile.reconciledNote && <div className="reconcile"><span>✓</span><span>{profile.reconciledNote}</span></div>}
                 <div className="field">
