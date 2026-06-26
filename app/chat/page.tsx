@@ -346,7 +346,7 @@ export default function Chat() {
       ) : (
       <main className="chat-main">
         <div className="app">
-          <ChatHeader onBack={() => { if (phase === "dashboard" && dashView === "chat") setDashView("plan"); else if (phase !== "upload") setPhase("upload"); }} />
+          <ChatHeader onBack={() => { if (phase === "dashboard" && dashView === "chat") setDashView("plan"); else if (phase === "upload") window.location.href = "/"; else setPhase("upload"); }} />
           <div className="scroll">
             {phase === "dashboard" && dashView === "chat" && (
               <button className="view-plan-btn" onClick={() => setDashView("plan")}>← Back to your plan</button>
